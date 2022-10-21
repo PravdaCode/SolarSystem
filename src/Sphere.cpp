@@ -7,6 +7,9 @@
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 
+#include <glm/gtx/transform.hpp>
+#include "glm/gtc/matrix_transform.hpp"
+
 #include <cstdlib>
 #include <iostream>
 #include <fstream>
@@ -16,7 +19,13 @@
 #include <cmath>
 #include <memory>
 
-static glm::vec3 centerearth;
+static const float periodOEarth = 10.0f;
+static const float periodREarth = periodOEarth / 2;
+
+static const float periodOMoon = periodREarth / 2;
+static const float periodRMoon = periodREarth;
+
+static glm::vec4 centerearth = glm::vec4(10.0f, 0.0f, 0.0f, 1.0f);
 
 Sphere::Sphere(float r, float x, float y, float z) {
     this->radius = r;
@@ -62,6 +71,13 @@ void Sphere::initGPUgeometry() {
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
         glEnableVertexAttribArray(1);
 
+        // UV map
+        glGenBuffers(1, &this->m_texCoordVbo);
+        glBindBuffer(GL_ARRAY_BUFFER, this->m_texCoordVbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(float) * this->m_vertexTexCoords.size(), this->m_vertexTexCoords.data(), GL_STATIC_DRAW);
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
+        glEnableVertexAttribArray(2);
+
 
     #else
         glCreateBuffers(1, &g_posVbo);
@@ -88,7 +104,9 @@ void Sphere::initGPUgeometry() {
 }
 
 void Sphere::render(GLuint g_program, glm::mat4 modelMatrix, glm::mat4 viewMatrix, glm::mat4 transMatrix) {
-
+    glActiveTexture(GL_TEXTURE0); // activate texture unit 0
+    glBindTexture(GL_TEXTURE_2D, this->m_texVbo);
+    glUniform1i(this->m_texVbo, 0);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
     glUniformMatrix4fv(glGetUniformLocation(g_program, "modelMat"), 1, GL_FALSE, glm::value_ptr(modelMatrix));
     glUniformMatrix4fv(glGetUniformLocation(g_program, "viewMat"), 1, GL_FALSE, glm::value_ptr(viewMatrix)); // compute the view matrix of the camera and pass it to the GPU program
@@ -122,8 +140,8 @@ void Sphere::createVector(const size_t resolution) {
             this->m_vertexNormals.push_back(y);
             this->m_vertexNormals.push_back(z);
 
-            this->m_vertexTex.push_back(i * textureCoefficient);
-            this->m_vertexTex.push_back(1 - j * textureCoefficient);
+            this->m_vertexTexCoords.push_back(i * textureCoefficient);
+            this->m_vertexTexCoords.push_back(1-j * textureCoefficient);
 
             //std::cout << x << y << z << std::endl;
 
@@ -152,12 +170,20 @@ std::vector<float> Sphere::getVector() {
     return this->m_vertexPositions;
 }
 
+std::string Sphere::getName() { return this->name; }
+
+float Sphere::getPeriodO() { return this->periode_o; }
+float Sphere::getPeriodR() { return this->periode_r; }
+
+glm::vec4 Sphere::getPosition() { return glm::vec4(this->x, this->y, this->z, 1.0f); }
+
 void Sphere::setName(std::string name) { this->name = name; }
+
+void Sphere::setTex(GLuint tex) { this->m_texVbo = tex; }
 
 void Sphere::setPeriode(float r, float o) {
     this->periode_r = r;
     this->periode_o = o;
 }
 
-void Sphere::
 

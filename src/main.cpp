@@ -51,6 +51,13 @@ const static float kRadOrbitEarth = 10;
 const static float kRadOrbitMoon = 2;
 
 std::vector<Sphere* > solarS;
+glm::vec4 centerearth = glm::vec4(10.0f, 0.0f, 0.0f, 1.0f);
+glm::vec4 centermoon = glm::vec4(10.0f, 0.0f, 0.0f, 1.0f);
+
+
+GLuint g_earthTexID = 0;
+GLuint g_sunTexID = 0;
+GLuint g_moonTexID = 0;
 
 // Window parameters
 GLFWwindow *g_window = nullptr;
@@ -105,33 +112,25 @@ private:
 Camera g_camera;
 
 
-GLuint loadTextureFromFileToGPU(const std::string &filename) {
-  GLuint texID;
-  int width, height, numComponents;
-  // Loading the image in CPU memory using stb_image
-  unsigned char *data = stbi_load(
-    filename.c_str(),
-    &width, &height,
-    &numComponents, // 1 for a 8 bit grey-scale image, 3 for 24bits RGB image, 4 for 32bits RGBA image
-      0);
-
-  glGenTextures(1, &texID); // generate an OpenGL texture container
-  glBindTexture(GL_TEXTURE_2D, texID); // activate the texture
-  // Setup the texture filtering option and repeat mode; check www.opengl.org for details.
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  // Fill the GPU texture with the data stored in the CPU image
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-  // TODO: create a texture and upload the image data in GPU memory using
-  // glGenTextures, glBindTexture, glTexParameteri, and glTexImage2D
-
-  // Free useless CPU memory
-  stbi_image_free(data);
-  glBindTexture(GL_TEXTURE_2D, 0); // unbind the texture
-
-  return texID;
+GLuint loadTextureFromFileToGPU(const std::string& filename) {
+    // Loading the image in CPU memory using stb_image
+    int width, height, numComponents;
+    unsigned char* data = stbi_load(filename.c_str(), &width, &height, &numComponents, 0);
+    GLuint texID = 0; // OpenGL texture identifier
+    glEnable(GL_TEXTURE_2D);
+    glGenTextures(1, &texID); // generate an OpenGL texture container
+    glBindTexture(GL_TEXTURE_2D, texID); // activate the texture
+    // Setup the texture filtering option and repeat mode; check www.opengl.org for details.
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    // Fill the GPU texture with the data stored in the CPU image
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+    // Free useless CPU memory
+    stbi_image_free(data);
+    glBindTexture(GL_TEXTURE_2D, 0); // unbind the texture
+    return texID;
 }
 
 // Executed each time the window is resized. Adjust the aspect ratio and the rendering viewport to the current window.
@@ -302,7 +301,7 @@ void initCamera() {
   glfwGetWindowSize(g_window, &width, &height);
   g_camera.setAspectRatio(static_cast<float>(width)/static_cast<float>(height));
 
-  g_camera.setPosition(glm::vec3(5.0, 2, 20));
+  g_camera.setPosition(glm::vec3(5.0, 2, 5));
   g_camera.setNear(0.1);
   g_camera.setFar(80.1);
 }
@@ -328,8 +327,19 @@ void clear() {
   glfwTerminate();
 }
 
+// Update any accessible variable based on the current time
+void update(float currentTime, GLuint g_program, glm::mat4 projMatrix, glm::mat4 viewMatrix) {
+    // std::cout << currentTimeInSec << std::endl;
+    glm::mat4 modelMatrix(1.f);
+
+    glm::mat4 transformationMatrix = projMatrix * viewMatrix * modelMatrix;
+    glUniform1i(glGetUniformLocation(g_program, "sunFlag"), 1);
+    solarS[0]->render(g_program, modelMatrix, viewMatrix, transformationMatrix);
+
+}
+
 // The main rendering call
-void render(std::vector<Sphere *> spheres) {
+void render() {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Erase the color and z buffers.
 
   const glm::mat4 viewMatrix = g_camera.computeViewMatrix();
@@ -337,89 +347,61 @@ void render(std::vector<Sphere *> spheres) {
   glUniformMatrix4fv(glGetUniformLocation(g_program, "viewMat"), 1, GL_FALSE, glm::value_ptr(viewMatrix)); // compute the view matrix of the camera and pass it to the GPU program
   glUniformMatrix4fv(glGetUniformLocation(g_program, "projMat"), 1, GL_FALSE, glm::value_ptr(projMatrix)); // compute the projection matrix of the camera and pass it to the GPU program
 
-  for (Sphere* s : solarS) {
-      s->update();
-      s->render();
+  float currentTime = glfwGetTime();
+  glm::vec4 centerearth = glm::vec4(10.0f, 0.0f, 0.0f, 1.0f);
+  float rotationangleearth;
+
+  for (Sphere * s : solarS) {
+      glm::mat4 modelMatrix(1.f);
+      float angspeedO = 360.f / s->getPeriodO();
+      float angspeedR = 360.f / s->getPeriodR();
+      float orbitang = angspeedO * currentTime;//calculate angle that the planet made
+      float rotationang = angspeedR * currentTime; //calculate angle that the planet made
+
+      if (s->getName() == "earth") {
+          //orbit
+          centerearth = s->getPosition();
+          glm::mat4 orbitMat = glm::rotate(glm::radians(orbitang), glm::vec3(0.0f, 1.0f, 0.0f));
+          centerearth = orbitMat * centerearth; //move center to new place
+          modelMatrix = glm::translate(glm::vec3(centerearth));
+
+          //rotation 
+
+          glm::mat4 rotateMat = glm::rotate(glm::radians(rotationang), glm::vec3(0.0f, 1.0f, 0.0f));
+          rotateMat = rotateMat * glm::rotate(glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+          modelMatrix = modelMatrix * rotateMat;
+      }
+
+      else if (s->getName() == "moon") {
+          //orbit
+          glm::vec4 center = s->getPosition();
+
+          glm::mat4 orbitMat = glm::rotate(glm::radians(orbitang), glm::vec3(0.0f, 1.0f, 0.0f));
+          center = orbitMat * center; //move center to new place
+
+          modelMatrix = glm::translate(glm::vec3(center) + glm::vec3(centerearth));
+
+          //rotate
+
+          glm::mat4 rotateMat = glm::rotate(glm::radians(rotationang), glm::vec3(0.0f, 1.0f, 0.0f));
+          rotateMat = rotateMat * glm::rotate(glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+          modelMatrix = modelMatrix * rotateMat;
+
+
+
+      }
+      glm::mat4 transformationMatrix = projMatrix * viewMatrix * modelMatrix;
+      glUniform1i(glGetUniformLocation(g_program, "sunFlag"), 1);
+      s->render(g_program, modelMatrix, viewMatrix, transformationMatrix);
   }
  
-  const float currentTime = glfwGetTime();
-  const float periodOEarth = 10.0f;
-  const float periodREarth = periodOEarth / 2;
-
-  const float periodOMoon = periodREarth / 2;
-  const float periodRMoon = periodREarth;
-
-
-  glm::mat4 modelMatrix(1.f);
-  glm::mat4 transformationMatrix = projMatrix * viewMatrix * modelMatrix;
-  glUniform1i(glGetUniformLocation(g_program, "sunFlag"), 1);
-  solarS[0]->render(g_program, modelMatrix, viewMatrix, transformationMatrix);
-
-
- float speed;
-
-   //earth
-GLuint m_vao = solarS[1]->m_vao;
-glm::vec4 center = glm::vec4(10.0f,0.0f,0.0f, 1.0f);
-          //orbit
-
-speed = 360.0f / periodOEarth;
-float orbitangleearth = speed * currentTime;
-
-glm::mat4 orbitMat = glm::rotate(glm::radians(orbitangleearth), glm::vec3(0.0f, 1.0f, 0.0f));
-center = orbitMat * center;
-glm::vec3 centerearth = glm::vec3(center);
-
-modelMatrix = glm::translate(centerearth);
-
-
-          //rotation
-speed = 360 / periodRMoon;
-float rotationanglemoon = speed * currentTime;
-
-glm::mat4 rotateMatrix = glm::rotate(glm::radians(rotationanglemoon), glm::vec3(0.0f, 1.0f, 0.0f));
-rotateMatrix = rotateMatrix * glm::rotate(glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-modelMatrix = modelMatrix * rotateMatrix;
-
-transformationMatrix = projMatrix * viewMatrix * modelMatrix;
-solarS[1]->render(g_program, modelMatrix, viewMatrix, transformationMatrix);
-
-
-          //moon
-          // orbit
-          speed = 360 / periodOMoon;
-          float orbitanglemoon = speed * currentTime;
-          center = glm::vec4(2.0f, 0.0f, 0.0f, 1.0f);
-          glm::mat4 orbitMatrix = glm::rotate(glm::radians(orbitanglemoon), glm::vec3(0.0f, 1.0f, 0.0f));
-          center = orbitMatrix * center;
-          glm::vec3 vec3CenterLua = glm::vec3(center);
-          vec3CenterLua = vec3CenterLua + centerearth;
-
-          modelMatrix = glm::translate(vec3CenterLua);
-
-          speed = 360 / periodREarth;
-          float rotationangleearth = speed * currentTime;
-
-          rotateMatrix = glm::rotate(glm::radians(rotationangleearth), glm::vec3(0.0f, 1.0f, 0.0f));
-          rotateMatrix = rotateMatrix * glm::rotate(glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-          
-          modelMatrix = modelMatrix * rotateMatrix;
-
-          transformationMatrix = projMatrix * viewMatrix * modelMatrix;
-          solarS[2]->render(g_program, modelMatrix, viewMatrix, transformationMatrix);
-          glUniform1i(glGetUniformLocation(g_program, "sunFlag"), 0);
 
 
   const glm::vec3 camPosition = g_camera.getPosition();
   glUniform3f(glGetUniformLocation(g_program, "camPos"), camPosition[0], camPosition[1], camPosition[2]);
 
   
-}
-
-// Update any accessible variable based on the current time
-void update(const float currentTimeInSec) {
-  // std::cout << currentTimeInSec << std::endl;
-
 }
 
 #include <direct.h>
@@ -432,17 +414,22 @@ int main(int argc, char ** argv) {
 
   Sphere* sun = new Sphere(kSizeSun, 0, 0, 0);
   Sphere* earth = new Sphere(kSizeEarth*2, kRadOrbitEarth, 0, 0);
-  Sphere* moon = new Sphere(kSizeMoon, (kRadOrbitEarth+kRadOrbitMoon)/2, 0, 0);
+  Sphere* moon = new Sphere(kSizeMoon, (kRadOrbitMoon), 0, 0);
 
-  //GLint g_earthTextID = loadTextureFromFileToGPU("media/earth.jpg");
+  float opt, rpt, opm, rpm;
+
+  rpt = 10;
+  opt = 2 * rpt;
+  opm = rpt / 2;
+  rpm = opm;
 
 
   sun->setName("sun");
   earth->setName("earth");
   moon->setName("moon");
 
-  earth->setPeriode(10,10);
-  moon->setPeriode(2,4);
+  earth->setPeriode(rpt,opt);
+  moon->setPeriode(opm,rpm);
 
 
 
@@ -451,9 +438,14 @@ int main(int argc, char ** argv) {
   solarS.push_back(moon);
 
   init(); // Your initialization code (user interface, OpenGL states, scene with geometry, material, lights, etc)
+  GLint g_sunTexID = loadTextureFromFileToGPU("media/sun.png");
+  GLint g_earthTexID = loadTextureFromFileToGPU("media/earth.jpg");
+  GLint g_moonTexID = loadTextureFromFileToGPU("media/moon.jpg");
+  sun->setTex(g_sunTexID);
+  earth->setTex(g_earthTexID);
+  moon->setTex(g_moonTexID);
   while(!glfwWindowShouldClose(g_window)) {
-    update(static_cast<float>(glfwGetTime()));
-    render(solarS);
+    render();
     glfwSwapBuffers(g_window);
     glfwPollEvents();
   }

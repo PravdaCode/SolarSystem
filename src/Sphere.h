@@ -21,20 +21,9 @@
 
 class Sphere {
 
+    static glm::vec4 centerearth;
+
 public:
-    GLuint m_vao;
-    GLuint m_posVbo;
-    GLuint m_normalVbo;
-    GLuint m_ibo;
-    GLuint m_texVbo;
-    std::vector<unsigned int> m_triangleIndices;
-    std::vector<float> m_vertexPositions;
-    std::vector<float> m_vertexNormals;
-    std::vector<float> m_vertexTex;
-    std::string name;
-    float periode_r, periode_o;
-    float radius;
-    float x, y, z;
 
     Sphere(float r, float x, float y, float z);
 
@@ -48,16 +37,44 @@ public:
 
     std::vector<float> getVector();
 
+    std::string getName();
+
+    float Sphere::getPeriodO();
+    float Sphere::getPeriodR();
+
+    glm::vec4 getPosition();
+
     void setName(std::string name);
 
     void setPeriode(float r, float o);
 
-    static std::shared_ptr<Sphere> genSphere(const size_t resolution, float r);
+    void setTex(GLuint tex);
 
-    void update();
+    static std::shared_ptr<Sphere> genSphere(const size_t resolution, float r);
 
 private:
 
+    //vao and coords related to texture
+    std::vector<float> m_vertexTexCoords;
+    GLuint m_texVbo;
+    GLuint m_texCoordVbo;
+
+    //vao related to the Sphere
+    std::string name;
+    GLuint m_vao;
+    GLuint m_posVbo;
+    GLuint m_normalVbo;
+    GLuint m_ibo;
+
+    //vectors to store the informations on each vertice and the conection between them
+    std::vector<unsigned int> m_triangleIndices;
+    std::vector<float> m_vertexPositions;
+    std::vector<float> m_vertexNormals;
+
+    //physical properties of the spheres
+    float periode_r, periode_o;
+    float radius;
+    float x, y, z;
 
 };
 
